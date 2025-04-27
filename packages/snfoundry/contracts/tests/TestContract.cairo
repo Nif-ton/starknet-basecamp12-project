@@ -1,46 +1,55 @@
 // import libraries
-use contracts::counter::{
-    Counter, ICounterDispatcher, ICounterDispatcherTrait, ICounterSafeDispatcher,
-    ICounterSafeDispatcherTrait,
-};
-use openzeppelin_access::ownable::interface::{IOwnableDispatcher, IOwnableDispatcherTrait};
 use snforge_std::EventSpyAssertionsTrait;
+
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, declare, spy_events, start_cheat_caller_address,
+    declare,
+    DeclareResultTrait,
+    ContractClassTrait,
+    spy_events,
+    start_cheat_caller_address,
     stop_cheat_caller_address,
 };
 use starknet::{ContractAddress};
+use contracts::counter::{
+    ICounterDispatcher,
+    ICounterDispatcherTrait,
+    Counter,
+    ICounterSafeDispatcher,
+    ICounterSafeDispatcherTrait,
+};
+use openzeppelin_access::ownable::interface::{
+    IOwnableDispatcher,
+    IOwnableDispatcherTrait
+};
+
+
 
 const ZERO_COUNT: u32 = 0;
 
-// Test Accounts
 fn OWNER() -> ContractAddress {
     'OWNER'.try_into().unwrap()
 }
-
 fn USER_1() -> ContractAddress {
     'USER_1'.try_into().unwrap()
 }
 
-
 // util deploy function
 fn __deploy__(init_value: u32) -> (ICounterDispatcher, IOwnableDispatcher, ICounterSafeDispatcher) {
-    // declare contract
-    let contract_class = declare("Counter").expect('failed to declare').contract_class();
+    //declare the contract
+    let contract_class = declare("Counter").unwrap().contract_class();
 
-    // serialize constructor args
+    // serialize constructor
     let mut calldata: Array<felt252> = array![];
     init_value.serialize(ref calldata);
     OWNER().serialize(ref calldata);
 
-    // deploy contract
-    let (contract_address, _) = contract_class.deploy(@calldata).expect('failed to deploy');
+    // deploy the contract
+    let (contract_address, _) = contract_class.deploy(@calldata).expect('Failed to deploy contract');
 
-    // return values
     let counter = ICounterDispatcher { contract_address };
     let ownable = IOwnableDispatcher { contract_address };
-    let safe_dispatcher = ICounterSafeDispatcher { contract_address };
-    (counter, ownable, safe_dispatcher)
+    let counter_safe = ICounterSafeDispatcher { contract_address };
+    (counter, ownable, counter_safe)
 }
 
 #[test]
@@ -221,31 +230,20 @@ fn test_emitted_decresed_event() {
 
 
 #[test]
-// This attribute enables the use of the `safe_dispatcher` feature,
-// which allows us to safely call external functions and handle errors gracefully.
-#[feature("safe_dispatcher")]
 fn test_safe_panic_reset_counter_by_non_owner() {
-    // Deploy an instance of the `counter` contract with an initial count of ZERO_COUNT.
-    // We also extract the `safe_dispatcher`, a special contract interface that lets us call methods
-    // safely.
-    let (counter, _, safe_dispatcher) = __deploy__(ZERO_COUNT);
+    // deploy the contract
+    let (counter, _, safe_dispatcher) = __deploy__(5);
 
-    // Make sure the counter was initialized correctly.
-    assert(counter.get_counter() == ZERO_COUNT, 'invalid count');
+    let count_1 = counter.get_counter();
+    assert(count_1 == 5, 'Counter is not 5');
 
-    // Change the caller address to `USER_1`, simulating a call from a non-owner account.
-    // This is important because we want to test unauthorized access.
     start_cheat_caller_address(counter.contract_address, USER_1());
-
-    // Reset the counter using the `safe_dispatcher`, which allows us to catch errors
     match safe_dispatcher.reset_counter() {
-        // If the call somehow succeeds, it means our access control failed — so we panic the test.
-        Result::Ok(_) => panic!("cannot reset"),
-        // If the call fails (which is expected), we check that the error message matches
-        // what we expect when a non-owner tries to reset the counter.
-        Result::Err(e) => assert(*e[0] == 'Caller is not the owner', *e.at(0)),
+        Result::Ok(_) => panic!("Cannot reset by non owner"),
+        Result::Err(e) => assert(*e[0] == Counter::Error::ONLY_OWNER, *e.at(0)),
     }
 }
+
 
 
 #[test]

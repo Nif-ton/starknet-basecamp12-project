@@ -19,8 +19,8 @@ pub mod Counter {
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
 
     #[abi(embed_v0)]
-    impl OwnableMixinImpl = OwnableComponent::OwnableMixinImpl<ContractState>;
-    impl OwnableTwoStepImpl = OwnableComponent::OwnableTwoStepImpl<ContractState>;
+    impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
 
     // STRK token address on StarkNet
     pub const FELT_STRK_CONTRACT: felt252 =
@@ -37,8 +37,8 @@ pub mod Counter {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, owner: ContractAddress) {
-        self.counter.write(0);
+    fn constructor(ref self: ContractState, init_value: u32, owner: ContractAddress) {
+        self.counter.write(init_value);
         self.ownable.initializer(owner);
     }
 
@@ -63,6 +63,7 @@ pub mod Counter {
 
     pub mod Error {
         pub const EMPTY_COUNTER: felt252 = 'Decreasing Empty counter';
+        pub const ONLY_OWNER: felt252 = 'Only owner is allowed';
     }
 
     #[abi(embed_v0)]
@@ -104,23 +105,8 @@ pub mod Counter {
         }
 
         fn reset_counter(ref self: ContractState) {
-            let caller = get_caller_address();
-            let strk_contract_address: ContractAddress = FELT_STRK_CONTRACT.try_into().unwrap();
-            
-            // Get STRK token dispatcher
-            let strk_dispatcher = IERC20Dispatcher {
-                contract_address: strk_contract_address,
-            };
-            
-            // Get contract's current STRK balance
-            let contract_balance = strk_dispatcher.balance_of(get_contract_address());
-            
-            // Transfer required STRK to contract
-            if contract_balance > 0 {
-                strk_dispatcher.transfer_from(caller, get_contract_address(), contract_balance);
-            }
-            
-            // Reset counter to 0
+            assert(get_caller_address() == self.ownable.owner(), Error::ONLY_OWNER);
+            // self.ownable.assert_only_owner();
             self.counter.write(0);
         }
         
