@@ -1,3 +1,5 @@
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+
 # Basecamp 12 App
 
 This is the app we will be building together as teachers of Basecamp 12.
